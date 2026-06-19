@@ -9,6 +9,8 @@
 #include "spi_manager.h"
 #include "pn5180.h"
 #include "lector_rf.h"
+#include "app/ble/ble_advertiser.h"
+#include "app/status_led/status_led.h"
 
 static const char *TAG = "LECTOR_RF";
 
@@ -16,21 +18,16 @@ static void lector_rf_task(void *arg)
 {
     ESP_LOGI(TAG, "Inicializando lector RF para lectura ISO15693 directa");
 
-    /*
-     * 1. Inicializar bus SPI y PN5180.
-     */
     spi_master_init();
     init_pn5180();
 
     vTaskDelay(pdMS_TO_TICKS(100));
-
-    /*
-     * 2. Lecturas de diagnóstico.
-     */
     pn5180_get_firmware_version();
 
     ESP_LOGI(TAG, "Modo actual: lectura directa ISO15693 sin LPCD y sin sleep");
     ESP_LOGI(TAG, "Acerca un tag ISO15693 a la antena...");
+
+    uint8_t no_tag_count = 0;
 
     while (1) {
         uint8_t uid[8] = {0};
@@ -44,18 +41,21 @@ static void lector_rf_task(void *arg)
                      uid[0], uid[1], uid[2], uid[3],
                      uid[4], uid[5], uid[6], uid[7]);
 
-            /*
-             * Pausa más larga cuando se detecta tag para no imprimirlo demasiado rápido.
-             */
+            ble_advertiser_set_uid(uid, uid_len);
+            status_led_set_tag_detected(true);
+            no_tag_count = 0;
+
             vTaskDelay(pdMS_TO_TICKS(1000));
         } else {
-            /*
-             * No se considera error crítico.
-             * Puede significar simplemente que no hay tag presente.
-             */
             ESP_LOGW(TAG,
                      "No se detecto tag ISO15693. ret=%s",
                      esp_err_to_name(err));
+
+            if (++no_tag_count >= 5) {
+                ble_advertiser_set_no_tag();
+                status_led_set_tag_detected(false);
+                no_tag_count = 5;
+            }
 
             vTaskDelay(pdMS_TO_TICKS(300));
         }
