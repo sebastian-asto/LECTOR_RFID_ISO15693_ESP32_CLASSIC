@@ -417,7 +417,7 @@ esp_err_t pn5180_prepare_lpcd(void)
      * Después de este comando no se debe leer/escribir al PN5180 por SPI
      * hasta que el pin IRQ despierte al ESP32-S3.
      */
-    err = pn5180_switch_mode_lpcd(1000);
+    err = pn5180_switch_mode_lpcd(3000);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Fallo entrando a LPCD: %s", esp_err_to_name(err));
         return err;
@@ -652,6 +652,8 @@ esp_err_t pn5180_iso15693_inventory(uint8_t *uid_out, size_t *uid_len)
                                   rx,
                                   &rx_len,
                                   50);
+
+    pn5180_rf_off();
 
     if (err != ESP_OK) {
         //ESP_LOGW(TAG, "No se obtuvo respuesta ISO15693 real");

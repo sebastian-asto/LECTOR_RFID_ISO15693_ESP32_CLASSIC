@@ -4,7 +4,8 @@ Firmware ESP-IDF para un lector RFID ISO15693 basado en ESP32 y PN5180. El equip
 
 ## Estado actual
 
-- Lectura RFID ISO15693 directa con PN5180 por SPI.
+- Lectura RFID ISO15693 con PN5180 por SPI.
+- Modo LPCD del PN5180 para esperar deteccion con menor consumo cuando no hay TAG.
 - Deteccion de UID del TAG en el monitor serial.
 - Publicacion BLE por advertising usando NimBLE.
 - Visualizacion desde nRF Connect sin necesidad de conectar por GATT.
@@ -52,7 +53,9 @@ Al iniciar, el firmware:
 4. Escanea dispositivos I2C como diagnostico.
 5. Inicializa SPI y PN5180.
 6. Lee la version de firmware del PN5180.
-7. Ejecuta inventario ISO15693 en bucle.
+7. Ejecuta inventario ISO15693.
+8. Si no encuentra TAG durante varios intentos, entra a LPCD.
+9. Cuando el PN5180 activa IRQ, vuelve a inventario normal para confirmar el UID.
 
 Ejemplo de UID detectado:
 
@@ -80,6 +83,20 @@ Para verificar desde el telefono:
 3. Buscar `RFID SIN TAG` o `RFID <UID>`.
 4. No es necesario presionar `CONNECT`.
 5. Al acercar o retirar el TAG, el nombre anunciado cambia.
+
+## LPCD del PN5180
+
+El modo LPCD usa el pin `IRQ` del PN5180 en `GPIO27`.
+
+Flujo actual:
+
+1. El lector intenta inventario ISO15693 normal.
+2. Si no detecta TAG por varios intentos, publica `RFID SIN TAG BAT:x%`.
+3. Apaga el campo RF y manda al PN5180 a `SWITCH_MODE LPCD`.
+4. La tarea RF queda esperando interrupcion por `GPIO27`.
+5. Al despertar por IRQ, lee `IRQ_STATUS`, limpia la IRQ y vuelve a intentar inventario ISO15693.
+
+Como el nivel activo del pin IRQ puede variar segun modulo/configuracion, el GPIO esta configurado por cualquier flanco. El inventario posterior valida si realmente hay TAG.
 
 ## Estructura del proyecto
 

@@ -130,8 +130,8 @@ static esp_err_t ble_advertiser_start(void)
 
     adv_params.conn_mode = BLE_GAP_CONN_MODE_NON;
     adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
-    adv_params.itvl_min = BLE_GAP_ADV_ITVL_MS(300);
-    adv_params.itvl_max = BLE_GAP_ADV_ITVL_MS(320);
+    adv_params.itvl_min = BLE_GAP_ADV_ITVL_MS(1000);
+    adv_params.itvl_max = BLE_GAP_ADV_ITVL_MS(1200);
 
     rc = ble_gap_adv_start(own_addr_type,
                            NULL,
