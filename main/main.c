@@ -12,6 +12,7 @@
 #include "app/rf/lector_rf.h"
 #include "app/ble/ble_advertiser.h"
 #include "app/status_led/status_led.h"
+#include "max17048.h"
 
 //void test_Mode_Light_sleep(uint32_t tiempo_ms);
 
@@ -23,6 +24,7 @@ void app_main(void)
     ble_advertiser_init();
     
     scanI2C_Devices();
+    max17048_init();
     lector_rf_start();
     status_led_init();
 

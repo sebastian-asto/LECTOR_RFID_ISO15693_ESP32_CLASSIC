@@ -6,5 +6,5 @@ idf_component_register(
     "app/ble/ble_advertiser.c"
     "app/status_led/status_led.c"
     INCLUDE_DIRS "."
-    REQUIRES spi_manager pn5180 i2c_manager bt nvs_flash
+    REQUIRES spi_manager pn5180 i2c_manager MAX17048 bt nvs_flash
 )

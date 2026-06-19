@@ -29,6 +29,11 @@ esp_err_t init_I2C_Master(void){
     return init_bus_i2c;
 }
 
+i2c_master_bus_handle_t i2c_manager_get_bus_handle(void)
+{
+    return i2c_bus_handle;
+}
+
 void scanI2C_Devices(void)
 {
     ESP_LOGI(TAG, "Escaneando dispositivos I2C...");

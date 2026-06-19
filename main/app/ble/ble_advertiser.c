@@ -18,25 +18,34 @@
 
 #include "ble_advertiser.h"
 
-#define BLE_DEVICE_NAME_IDLE "RFID SIN TAG"
 #define BLE_UID_LEN          8
+#define BLE_NAME_MAX_LEN     31
 
 static const char *TAG = "BLE_ADV";
 
 static uint8_t own_addr_type;
 static bool ble_synced;
 static bool has_uid;
+static uint8_t current_battery_percent;
 static uint8_t current_uid[BLE_UID_LEN];
-static char scan_name[sizeof("RFID ") + (BLE_UID_LEN * 2)];
+static char scan_name[BLE_NAME_MAX_LEN + 1];
 
 void ble_store_config_init(void);
 
-static void set_idle_name(void)
+static uint8_t battery_percent_diff(uint8_t a, uint8_t b)
 {
-    snprintf(scan_name, sizeof(scan_name), "%s", BLE_DEVICE_NAME_IDLE);
+    return (a > b) ? (a - b) : (b - a);
 }
 
-static void uid_to_hex_name(const uint8_t *uid)
+static void set_idle_name(uint8_t battery_percent)
+{
+    snprintf(scan_name,
+             sizeof(scan_name),
+             "RFID SIN TAG BAT:%u%%",
+             (unsigned int)battery_percent);
+}
+
+static void uid_to_hex_name(const uint8_t *uid, uint8_t battery_percent)
 {
     int offset = snprintf(scan_name, sizeof(scan_name), "RFID ");
 
@@ -46,6 +55,11 @@ static void uid_to_hex_name(const uint8_t *uid)
                            "%02X",
                            uid[i]);
     }
+
+    snprintf(&scan_name[offset],
+             sizeof(scan_name) - (size_t)offset,
+             " BAT:%u%%",
+             (unsigned int)battery_percent);
 }
 
 static int ble_gap_event(struct ble_gap_event *event, void *arg)
@@ -54,7 +68,8 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_ADV_COMPLETE:
         if (ble_synced) {
             ble_advertiser_set_uid(has_uid ? current_uid : NULL,
-                                   has_uid ? BLE_UID_LEN : 0);
+                                   has_uid ? BLE_UID_LEN : 0,
+                                   current_battery_percent);
         }
         break;
 
@@ -68,7 +83,7 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg)
 static esp_err_t ble_advertiser_start(void)
 {
     int rc;
-    uint8_t mfg_data[2 + BLE_UID_LEN] = {0xFF, 0xFF};
+    uint8_t mfg_data[4 + BLE_UID_LEN] = {0xFF, 0xFF};
     struct ble_hs_adv_fields adv_fields = {0};
     struct ble_hs_adv_fields rsp_fields = {0};
     struct ble_gap_adv_params adv_params = {0};
@@ -88,11 +103,15 @@ static esp_err_t ble_advertiser_start(void)
     adv_fields.tx_pwr_lvl_is_present = 1;
     adv_fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
 
+    mfg_data[2] = current_battery_percent;
+    mfg_data[3] = has_uid ? 1 : 0;
+
     if (has_uid) {
-        memcpy(&mfg_data[2], current_uid, BLE_UID_LEN);
-        adv_fields.mfg_data = mfg_data;
-        adv_fields.mfg_data_len = sizeof(mfg_data);
+        memcpy(&mfg_data[4], current_uid, BLE_UID_LEN);
     }
+
+    adv_fields.mfg_data = mfg_data;
+    adv_fields.mfg_data_len = has_uid ? sizeof(mfg_data) : 4;
 
     rc = ble_gap_adv_set_fields(&adv_fields);
     if (rc != 0) {
@@ -170,7 +189,7 @@ esp_err_t ble_advertiser_init(void)
         return ret;
     }
 
-    set_idle_name();
+    set_idle_name(current_battery_percent);
 
     ret = nimble_port_init();
     if (ret != ESP_OK) {
@@ -200,31 +219,36 @@ esp_err_t ble_advertiser_init(void)
     return ESP_OK;
 }
 
-void ble_advertiser_set_uid(const uint8_t *uid, size_t uid_len)
+void ble_advertiser_set_uid(const uint8_t *uid, size_t uid_len, uint8_t battery_percent)
 {
     if (uid == NULL || uid_len != BLE_UID_LEN) {
-        ble_advertiser_set_no_tag();
+        ble_advertiser_set_no_tag(battery_percent);
         return;
     }
 
-    if (has_uid && memcmp(current_uid, uid, BLE_UID_LEN) == 0) {
+    if (has_uid &&
+        memcmp(current_uid, uid, BLE_UID_LEN) == 0 &&
+        battery_percent_diff(current_battery_percent, battery_percent) <= 2) {
         return;
     }
 
     memcpy(current_uid, uid, BLE_UID_LEN);
     has_uid = true;
-    uid_to_hex_name(current_uid);
+    current_battery_percent = battery_percent;
+    uid_to_hex_name(current_uid, current_battery_percent);
     ble_advertiser_start();
 }
 
-void ble_advertiser_set_no_tag(void)
+void ble_advertiser_set_no_tag(uint8_t battery_percent)
 {
-    if (!has_uid && strcmp(scan_name, BLE_DEVICE_NAME_IDLE) == 0) {
+    if (!has_uid &&
+        battery_percent_diff(current_battery_percent, battery_percent) <= 2) {
         return;
     }
 
     has_uid = false;
+    current_battery_percent = battery_percent;
     memset(current_uid, 0, sizeof(current_uid));
-    set_idle_name();
+    set_idle_name(current_battery_percent);
     ble_advertiser_start();
 }
